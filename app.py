@@ -5,12 +5,12 @@ from facenet_pytorch import MTCNN, InceptionResnetV1
 from PIL import Image
 import numpy as np
 import matplotlib.pyplot as plt
-import cv2
+import os
 
-# ضبط إعدادات الصفحة الرسمية بمظهر ملكي داكن
+# ضبط إعدادات الصفحة الرسمية بمظهر ملكي
 st.set_page_config(page_title="Biometric Security Evaluator", layout="wide", initial_sidebar_state="expanded")
 
-# تطبيق كود CSS مخصص لمنح الواجهة ألواناً ملكية (Royal Dark Blue, Crimson, Gold Accent)
+# تطبيق كود CSS مخصص للمظهر الملكي الفخم
 st.markdown("""
     <style>
     .main { background-color: #0B1026; color: #F5F1E6; }
@@ -19,11 +19,10 @@ st.markdown("""
     .stButton>button { background-color: #D4AF37 !important; color: #0B1026 !important; font-weight: bold; border-radius: 8px; border: 1.5px solid #D4AF37; }
     .stButton>button:hover { background-color: #890304 !important; color: white !important; border: 1.5px solid #890304; }
     div.stAlert { background-color: #1C2E73; border: 1px solid #D4AF37; color: #F5F1E6; }
-    .stSlider [data-baseweb="slider"] { background-color: #D4AF37; }
     </style>
     """, unsafe_allow_html=True)
 
-# تهيئة النماذج مرة واحدة فقط وحفظها في الذاكرة المؤقتة لسرعة الاستجابة
+# تحميل النماذج
 @st.cache_resource
 def load_models():
     device = torch.device('mps' if torch.backends.mps.is_available() else 'cpu')
@@ -62,14 +61,42 @@ def pgd_attack(image_tensor, target_embedding, epsilon, alpha=0.01, num_iter=10)
         image_adv = torch.clamp(original_image + eta, min=-1.0, max=1.0)
     return image_adv.squeeze(0).detach()
 
-# --- عنوان الواجهة التفاعلية ---
+def plot_interactive_curve(face1, ref_emb, current_eps):
+    eps_range = [0.0, 0.01, 0.03, 0.05, 0.08, 0.10]
+    fgsm_list, pgd_list = [], []
+    for ep in eps_range:
+        adv_f = fgsm_attack(face1, ref_emb, ep)
+        adv_p = pgd_attack(face1, ref_emb, ep)
+        with torch.no_grad():
+            f_sim = F.cosine_similarity(F.normalize(model(adv_f.unsqueeze(0)), p=2, dim=1), ref_emb).item()
+            p_sim = F.cosine_similarity(F.normalize(model(adv_p.unsqueeze(0)), p=2, dim=1), ref_emb).item()
+        fgsm_list.append(f_sim)
+        pgd_list.append(p_sim)
+
+    fig, ax = plt.subplots(figsize=(10, 4.5))
+    ax.plot(eps_range, fgsm_list, marker='o', color='#1f77b4', linewidth=2, label='FGSM (Single-Step)')
+    ax.plot(eps_range, pgd_list, marker='s', color='#d62728', linewidth=2, label='PGD (Iterative 10-Step)')
+    ax.axhline(y=0.50, color='green', linestyle='--', linewidth=1.5, label='Decision Threshold (0.5)')
+    ax.axvline(x=current_eps, color='#D4AF37', linestyle=':', linewidth=2, label=f'Current Epsilon ({current_eps})')
+
+    ax.set_title('Adversarial Robustness Curve: Cosine Similarity vs. Perturbation (Epsilon)', fontsize=12, fontweight='bold')
+    ax.set_xlabel('Perturbation Strength (Epsilon)', fontsize=11)
+    ax.set_ylabel('Cosine Similarity Score', fontsize=11)
+    ax.set_ylim(-0.8, 1.0)
+    ax.grid(True, linestyle=':', alpha=0.6)
+    ax.legend(loc='lower left', fontsize=10)
+    plt.tight_layout()
+    return fig
+
+# --- العنوان الرئيسي ---
 st.title("🛡️ Adversarial Machine Learning Security Suite")
 st.subheader("Evaluating Biometric Verification (Face Recognition) Against Adversarial Attacks")
 
-# --- القائمة الجانبية لإدخال البيانات والمؤشرات ---
+# --- القائمة الجانبية (تم حل مشكلة الأيقونة التالفة هنا) ---
 with st.sidebar:
-    st.image("https://img.icons8.com/fancy/200/shield.png", width=120)
-    st.markdown("### Inputs & Control", unsafe_allow_html=True)
+    st.markdown("<div style='text-align: center; font-size: 60px;'>🏛️</div>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center;'>Security Console</h3>", unsafe_allow_html=True)
+    st.markdown("---")
     
     file1 = st.file_uploader("Image 1: Original Face", type=["jpeg", "jpg", "png"])
     file2 = st.file_uploader("Image 2: Target Identity", type=["jpeg", "jpg", "png"])
@@ -79,7 +106,7 @@ with st.sidebar:
     
     run_btn = st.button("🚀 Run Security Benchmark")
 
-# --- المساحة الرئيسية للعرض ---
+# --- مساحة العرض الرئيسية ---
 if file1 and file2:
     if run_btn:
         with st.spinner("Analyzing Facial Embeddings & Simulating Attacks..."):
@@ -87,9 +114,8 @@ if file1 and file2:
             face2 = process_uploaded_image(file2)
             
             if face1 is None or face2 is None:
-                st.error("⚠️ Failed to detect a clear face in one or both of the uploaded images. Please ensure proper lighting and front-facing poses.")
+                st.error("⚠️ Failed to detect a clear face in one or both of the uploaded images.")
             else:
-                # حساب الميزات الأصلية
                 face1 = face1.to(device)
                 face2 = face2.to(device)
                 with torch.no_grad():
@@ -97,22 +123,20 @@ if file1 and file2:
                     orig_emb = F.normalize(model(face1.unsqueeze(0)), p=2, dim=1)
                     orig_sim = F.cosine_similarity(orig_emb, ref_emb).item()
                 
-                # توليد الهجوم المحدد
+                # تنفيذ الهجوم
                 if attack_type == "FGSM (Single-Step Fast)":
                     adv_face = fgsm_attack(face1, ref_emb, epsilon)
                 else:
                     adv_face = pgd_attack(face1, ref_emb, epsilon)
                 
-                # حساب النسبة الجديدة بعد الهجوم
                 with torch.no_grad():
                     adv_emb = F.normalize(model(adv_face.unsqueeze(0)), p=2, dim=1)
                     adv_sim = F.cosine_similarity(adv_emb, ref_emb).item()
                 
                 threshold = 0.50
                 
-                # --- عرض النتائج التفاعلية ---
                 st.markdown("---")
-                st.markdown("### Benchmark Results", unsafe_allow_html=True)
+                st.markdown("### Visual & Adversarial Results")
                 
                 col1, col2, col3 = st.columns(3)
                 
@@ -128,14 +152,12 @@ if file1 and file2:
                 with col1:
                     st.image(orig_np, caption=f"Original Face (Baseline Sim: {orig_sim:.4f})", use_container_width=True)
                 with col2:
-                    st.image(diff_np, caption="Perturbation Noise Map (x10 Amplified)", use_container_width=True)
+                    st.image(diff_np, caption="Perturbation Map (x10 Amplified)", use_container_width=True)
                 with col3:
                     st.image(adv_np, caption=f"Adversarial Image (Attack Sim: {adv_sim:.4f})", use_container_width=True)
                 
-                # بطاقات الحالة الأمنية
-                st.markdown("#### Verification Decision Status", unsafe_allow_html=True)
+                # بطاقات القرار
                 card_col1, card_col2 = st.columns(2)
-                
                 with card_col1:
                     st.markdown(f"""
                     <div style="padding:15px; border-radius:10px; background-color:#1B2A6B; border:1px solid #D4AF37;">
@@ -149,7 +171,6 @@ if file1 and file2:
                     is_evaded = adv_sim < threshold
                     status_text = "❌ REJECTED (Evasion Attack Success)" if is_evaded else "⚠ MATCHED (Attack Failed)"
                     status_color = "#e74c3c" if is_evaded else "#2980b9"
-                    
                     st.markdown(f"""
                     <div style="padding:15px; border-radius:10px; background-color:#1c1024; border:1px solid {status_color};">
                         <h4 style='margin:0; color:{status_color};'>Adversarial Verification</h4>
@@ -158,6 +179,11 @@ if file1 and file2:
                     </div>
                     """, unsafe_allow_html=True)
 
+                # --- إضافة الرسم البياني التفاعلي مباشرة بالأسفل ---
+                st.markdown("---")
+                st.markdown("### 📈 Adversarial Robustness Curve Analysis")
+                fig = plot_interactive_curve(face1, ref_emb, epsilon)
+                st.pyplot(fig)
+
 else:
-    # واجهة افتراضية ترحيبية عند عدم رفع صور
     st.info("👋 Welcome to the Face Recognition Robustness Dashboard. Please upload an image pair in the sidebar and click 'Run Security Benchmark' to generate evaluation results.")
