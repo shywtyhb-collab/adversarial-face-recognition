@@ -1,0 +1,22 @@
+ إنشاء وتفعيل البيئة الافتراضية
+انسخ هذا السطر والصقه في الـ 
+Terminal 
+python3 -m venv venv
+واضغط Enter:
+
+بعد أن يكتمل، فعّل البيئة بهذا الأمر:
+source venv/bin/activate
+(ستلاحظ ظهور كلمة (venv) في بداية السطر).
+
+ تثبيت المكتبات
+ pip install -r requirements.txt
+
+قبل تشغيل الكود يجب تحميل صورتين واضحات ومتشابهة تقريبا داخل
+(Folder)
+الصور يجب ان تكون بصيغة 
+jpg OR jpeg
+python fgsm_demo.py --img1 me1.jpeg --img2 me2.jpeg
+OR
+python fgsm_demo.py --img1 me1.jpg --img2 me2.jpg
+تشغيل الكود داخل 
+Terminal

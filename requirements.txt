@@ -1,0 +1,9 @@
+torch
+torchvision
+facenet-pytorch
+numpy
+opencv-python
+pillow
+matplotlib
+pandas
+tabulate
