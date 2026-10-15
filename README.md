@@ -56,6 +56,9 @@ accuracy 97.5%, FAR 0.0%, FRR 4.85%, AUC 0.982.
 
 Full table with 95% confidence intervals: `results.csv`.
 
+![ASR curve](asr_curve.png)
+![Robustness curve (single pair)](robustness_curve.png)
+
 **Observations**
 - PGD reaches 99% ASR at about 2.6/255, so the model is very fragile in the white-box setting.
 - Blur and JPEG reduce ASR only at the smallest perturbation (about 1.3/255) and offer almost no protection beyond it.
