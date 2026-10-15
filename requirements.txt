@@ -1,9 +1,9 @@
 torch
 torchvision
 facenet-pytorch
-numpy
-opencv-python
 pillow
+numpy
 matplotlib
-pandas
+scikit-learn
+streamlit
 tabulate
